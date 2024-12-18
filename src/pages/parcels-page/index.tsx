@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { Button, TextField } from "../../components";
 
@@ -8,7 +8,7 @@ export function ParcelsPage(): JSX.Element {
     const textareaCodeRef = useRef<HTMLTextAreaElement>(null);
     const textareaResultRef = useRef<HTMLTextAreaElement>(null);
 
-    const [isConsulting, setIsConsulting] = useState<boolean>(true);
+    const isConsulting = false;
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
         event.preventDefault();
