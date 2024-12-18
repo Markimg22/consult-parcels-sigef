@@ -1,0 +1,19 @@
+.contained {
+    background-color: #265E8F;
+    color: #FFFFFF;
+}
+
+.outlined {
+    background-color: transparent;
+    border: 1px solid #e7e4e4;
+    color: #e7e4e4;
+}
+
+.contained,
+.outlined {
+    border-radius: 0.4rem;
+    padding: 1rem 1.5rem;
+    font-size: 1.6rem;
+    font-weight: 500;
+    width: 100%;
+}

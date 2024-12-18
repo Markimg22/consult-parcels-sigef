@@ -1,0 +1,55 @@
+.container {
+    padding: 2rem;
+    width: 100%;
+    height: 100vh;
+}
+
+.form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 2rem;
+}
+
+.loadingContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.progressBarContainer {
+    width: 100%;
+    background-color: #e7e4e4;
+    height: 2rem;
+    border-radius: 0.3rem;
+}
+
+.progressBar {
+    width: 0%;
+    height: 100%;
+    background-color: #265E8F;
+    border-radius: 0.3rem;
+    transition: width 0.2s ease-in-out;
+}
+
+.loadingLabel {
+    font-size: 1.2rem;
+}
+
+.buttonsContainer {
+    width: 80%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    align-self: flex-end;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+@media (max-width: 400px) {
+    .buttonsContainer {
+        flex-direction: column-reverse;
+        width: 100%;
+    }
+}
