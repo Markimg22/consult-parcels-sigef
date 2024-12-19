@@ -1,31 +1,49 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
-import { Button, TextField } from "../../components";
+import { Button, TextField, UploadField } from "../../components";
 
 import styles from "./styles.module.css";
 
 export function CookiesPage(): JSX.Element {
-    const textareaCookiesRef = useRef<HTMLTextAreaElement>(null);
+    const [file, setFile] = useState<File | null>(null);
 
-    const handleSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
+    const textareaCookiesRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
         event.preventDefault();
+
+        try {
+            const message = await invoke("greet");
+            console.log(message);
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     return (
         <div className={styles.container}>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className={styles.form}>
                 <TextField
-                    label='Insira os Cookies da plataforma de Consulta SIGEF'
+                    label='Insira os Cookies da plataforma Consulta SIGEF'
                     labelProps={{
                         htmlFor: 'textarea-cookies'
                     }}
                     textareaProps={{
                         id: 'textarea-cookies',
                         ref: textareaCookiesRef,
-                        placeholder: 'Exemplo:\n\n[\n{\n"domain": ".incra.gov.br",\n"expirationDate": 1765759556.3249,\n"hostOnly":false,\n"httpOnly":false,\n"name":"_ga",\n...\n},\n...outras chaves\n]',
+                        placeholder: 'Exemplo:\n\n{"url": "https://sigef.incra.gov.br", "cookies": [{"domain": ".incra.gov.br"...}]}',
                         cols: 30,
-                        rows: 20
+                        rows: 5,
                     }}
+                />
+                <p className={styles.or}>Ou</p>
+                <UploadField
+                    accept=".json"
+                    fileInputRef={fileInputRef}
+                    file={file}
+                    setFile={setFile}
                 />
                 <Button
                     title="Salvar"
