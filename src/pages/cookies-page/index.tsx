@@ -1,24 +1,36 @@
-import { useRef, useState } from "react";
+import {  useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { message } from "@tauri-apps/plugin-dialog";
 
-import { Button, TextField, UploadField } from "../../components";
+import { Button, TextField, UploadFile } from "../../components";
 
 import styles from "./styles.module.css";
 
 export function CookiesPage(): JSX.Element {
-    const [file, setFile] = useState<File | null>(null);
-
-    const textareaCookiesRef = useRef<HTMLTextAreaElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [filePath, setFilePath] = useState<string | null>(null);
+    const [cookiesText, setCookiesText] = useState<string>("");
+    const [loading, setLoading] = useState<boolean>(false);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
         event.preventDefault();
 
         try {
-            const message = await invoke("greet");
-            console.log(message);
+            setLoading(true);
+
+            let path: string = "";
+            if (cookiesText !== "") {
+                path = await invoke<string>("save_text_cookies", { text: cookiesText })
+            } else if (filePath !== "") {
+                path = await invoke<string>("save_json_cookies", { filePath });
+            }
+
+            await message(`Salvo em ${path}`, { title: "Cookies salvo com sucesso!", kind: "info" });
         } catch (error) {
             console.error(error);
+        } finally {
+            setLoading(false);
+            setFilePath(null);
+            setCookiesText("");
         }
     };
 
@@ -32,22 +44,23 @@ export function CookiesPage(): JSX.Element {
                     }}
                     textareaProps={{
                         id: 'textarea-cookies',
-                        ref: textareaCookiesRef,
+                        value: cookiesText,
+                        onChange: (e) => setCookiesText(e.target.value.trim()),
                         placeholder: 'Exemplo:\n\n{"url": "https://sigef.incra.gov.br", "cookies": [{"domain": ".incra.gov.br"...}]}',
                         cols: 30,
                         rows: 5,
                     }}
                 />
                 <p className={styles.or}>Ou</p>
-                <UploadField
+                <UploadFile
                     accept=".json"
-                    fileInputRef={fileInputRef}
-                    file={file}
-                    setFile={setFile}
+                    filePath={filePath}
+                    setFilePath={setFilePath}
                 />
                 <Button
-                    title="Salvar"
+                    title={loading ? "Salvando..." : "Salvar"}
                     type='submit'
+                    disabled={loading}
                 />
             </form>
         </div>
