@@ -26,7 +26,7 @@ export function CookiesPage(): JSX.Element {
 
             await message(`Salvo em ${path}`, { title: "Cookies salvo com sucesso!", kind: "info" });
         } catch (error) {
-            console.error(error);
+            console.error('Error save cookies: ', error);
         } finally {
             setLoading(false);
             setFilePath(null);

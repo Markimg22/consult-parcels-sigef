@@ -1,4 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { message } from "@tauri-apps/plugin-dialog";
 
 import { Button, TextField } from "../../components";
 
@@ -8,12 +10,24 @@ export function ParcelsPage(): JSX.Element {
     const textareaCodeRef = useRef<HTMLTextAreaElement>(null);
     const textareaResultRef = useRef<HTMLTextAreaElement>(null);
 
-    const isConsulting = false;
+    const [isConsulting, setIsConsulting] = useState<boolean>(false);
 
-    const handleSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
         event.preventDefault();
-        const codes = textareaCodeRef.current?.value;
-        console.log(codes);
+
+        try {
+            setIsConsulting(true);
+
+            const parcels = textareaCodeRef.current?.value.trim().split("\n");
+            const resultParcels = await invoke<string>("consult_parcels", { parcels });
+
+            console.log(resultParcels);
+        } catch (error) {
+            console.error('Error consult parcels: ', error);
+            await message(String(error).split(".")[0], { title: "Houve um erro!", kind: "error" });
+        } finally {
+            setIsConsulting(false);
+        }
     };
 
     return (
