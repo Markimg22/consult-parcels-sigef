@@ -12,6 +12,10 @@
     margin-bottom: 2rem;
 }
 
+.orderData {
+    font-size: 1.3rem;
+}
+
 .loadingContainer {
     display: flex;
     flex-direction: column;
@@ -26,9 +30,8 @@
 }
 
 .progressBar {
-    width: 0%;
     height: 100%;
-    background-color: #265E8F;
+    background-color: #37BC37;
     border-radius: 0.3rem;
     transition: width 0.2s ease-in-out;
 }
@@ -38,7 +41,7 @@
 }
 
 .buttonsContainer {
-    width: 80%;
+    width: 100%;
     display: flex;
     flex-direction: row;
     align-items: center;

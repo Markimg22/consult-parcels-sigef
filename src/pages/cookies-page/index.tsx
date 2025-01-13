@@ -60,7 +60,7 @@ export function CookiesPage(): JSX.Element {
                 <Button
                     title={loading ? "Salvando..." : "Salvar"}
                     type='submit'
-                    disabled={loading}
+                    disabled={loading || (cookiesText === "" && filePath === null)}
                 />
             </form>
         </div>
