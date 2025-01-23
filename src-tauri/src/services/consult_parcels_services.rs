@@ -40,6 +40,7 @@ pub struct AppState {
     is_paused: Arc<Mutex<bool>>,
     is_cancelled: Arc<Mutex<bool>>,
     notify: Arc<Notify>,
+    has_error: Arc<Mutex<bool>>,
 }
 
 impl AppState {
@@ -48,6 +49,7 @@ impl AppState {
             is_paused: Arc::new(Mutex::new(false)),
             is_cancelled: Arc::new(Mutex::new(false)),
             notify: Arc::new(Notify::new()),
+            has_error: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -55,12 +57,13 @@ impl AppState {
         loop {
             let paused = *self.is_paused.lock().await;
             let cancelled = *self.is_cancelled.lock().await;
+            let has_error = *self.has_error.lock().await;
 
             if cancelled {
                 break;
             }
 
-            if !paused {
+            if !paused && !has_error {
                 return;
             }
 
@@ -74,7 +77,11 @@ impl AppState {
 
     pub async fn resume(&self) {
         *self.is_paused.lock().await = false;
+        *self.has_error.lock().await = false;
+
         self.notify.notify_waiters();
+
+        self.wait_if_paused().await;
     }
 
     pub async fn cancel(&self) {
@@ -85,7 +92,17 @@ impl AppState {
     pub async fn reset(&self) {
         *self.is_paused.lock().await = false;
         *self.is_cancelled.lock().await = false;
+        *self.has_error.lock().await = false;
         self.notify.notify_waiters();
+    }
+
+    pub async fn set_error(&self) {
+        *self.has_error.lock().await = true;
+        self.pause().await;
+    }
+
+    pub async fn get_has_error(&self) -> bool {
+        *self.has_error.lock().await
     }
 }
 
@@ -270,8 +287,11 @@ pub async fn consult_parcels(
                         }
                     }
                     Err(error) => {
-                        state.pause().await;
-                        app_handler.emit("consult_parcels", error.clone()).unwrap();
+                        if !state.get_has_error().await {
+                            state.set_error().await;
+                            app_handler.emit("consult_parcels", error.clone()).unwrap();
+                        }
+
                         break;
                     }
                 }
@@ -282,9 +302,11 @@ pub async fn consult_parcels(
     drop(tx);
 
     while let Some(response) = rx.recv().await {
-        if !*state.is_cancelled.lock().await {
-            app_handler.emit("consult_parcels", response).unwrap();
+        if *state.is_cancelled.lock().await {
+            break;
         }
+
+        app_handler.emit("consult_parcels", response).unwrap();
     }
 
     Ok(())
