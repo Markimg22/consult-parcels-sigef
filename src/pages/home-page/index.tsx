@@ -31,7 +31,12 @@ export function HomePage(): JSX.Element {
             </nav>
             <hr className={styles.line} />
             <div className={styles.content}>
-                {pages === Pages.PARCELS ? <ParcelsPage /> : <CookiesPage />}
+                <div style={{ display: pages === Pages.PARCELS ? "block" : "none" }}>
+                    <ParcelsPage  />
+                </div>
+                <div style={{ display: pages === Pages.COOKIES ? "block" : "none" }}>
+                    <CookiesPage />
+                </div>
             </div>
         </main>
     );
