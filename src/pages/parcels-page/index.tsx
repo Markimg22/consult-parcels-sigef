@@ -27,73 +27,108 @@ type ParcelData = {
     rt_document: string;
 }
 
+type ParcelResponse = {
+    data: ParcelData;
+    total_count: number;
+    current_count: number;
+}
+
+type ConsultStatus = "default" | "consulting" | "paused";
+
 export function ParcelsPage(): JSX.Element {
     const [codeParcelsText, setCodeParcelsText] = useState<string>("");
     const [resultParcelsText, setResultParcelsText] = useState<string>("");
 
-    const [isConsulting, setIsConsulting] = useState<boolean>(false);
-    const [isPaused, setIsPaused] = useState<boolean>(false);
-
     const [loadedCount, setLoadedCount] = useState<number>(0);
     const [totalCount, setTotalCount] = useState<number>(0);
 
+    const [consultStatus, setConsultStatus] = useState<ConsultStatus>("default");
+
     useEffect(() => {
-        let isMounted = true;
+        const unlistenSuccess = listen<ParcelResponse | string>("consult_parcels", async (event) => {
+            if (typeof event.payload === "string") {
+                setConsultStatus("paused");
+                await message(event.payload, { title: "Houve um erro!", kind: "error" });
+            } else {
+                const result = event.payload;
 
-        const setupListener = async () => {
-            const unlisten = await listen<ParcelData>("consult_parcel_result", async (event) => {
-                if (isMounted) {
-                    const result = event.payload;
+                setLoadedCount(result.current_count);
 
-                    if (typeof result === "string") {
-                        await message(result, { title: "Houve um erro!", kind: "error" });
-                    } else {
-                        setResultParcelsText(prev => prev + `${result.parcel_code} | ${result.owner_name} | ${result.owner_cpf_or_cnpj} | ${result.denomination} | ${result.area} | ${result.situation_parcel} | ${result.technical_manager} | ${result.situation_area} | ${result.city_uf} | ${result.registry_office} | ${result.cns} | ${result.registration} | ${result.registration_situation} | ${result.code_incra} | ${result.property_type} | ${result.date_of_entry} | ${result.rt_document}\n`);
-                        setLoadedCount(prev => prev + 1);
-                    }
-                }
-            });
-
-            return () => {
-                isMounted = false;
-                unlisten();
-            };
-        };
-
-        const cleanup = setupListener();
+                setResultParcelsText(prev =>
+                    prev + `${result.data.parcel_code} | ${result.data.owner_name} | ${result.data.owner_cpf_or_cnpj} | ${result.data.denomination} | ${result.data.area} | ${result.data.situation_parcel} | ${result.data.technical_manager} | ${result.data.situation_area} | ${result.data.city_uf} | ${result.data.registry_office} | ${result.data.cns} | ${result.data.registration} | ${result.data.registration_situation} | ${result.data.code_incra} | ${result.data.property_type} | ${result.data.date_of_entry} | ${result.data.rt_document}\n`
+                );
+            }
+        });
 
         return () => {
-            cleanup.then((unlisten) => unlisten());
+            unlistenSuccess.then((fn) => fn());
         };
     }, []);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
         event.preventDefault();
+        console.log("Submit");
 
         try {
-            setIsConsulting(true);
+            setConsultStatus("consulting");
 
-            const parcels = codeParcelsText.trim().split("\n");
-
-            setLoadedCount(0);
+            const parcels = codeParcelsText.split("\n").map(item => item.trim());
             setTotalCount(parcels.length);
 
-            await invoke<ParcelData>("consult_parcels", { parcels });
+            await invoke("reset_consult");
+            await invoke<ParcelResponse>("consult_parcels", { parcels });
         } catch (error) {
             console.error('Error consult parcels: ', error);
-            await message(String(error).split(".")[0], { title: "Houve um erro!", kind: "error" });
-        } finally {
-            setIsConsulting(false);
         }
     };
 
-    const handlePauseAndResumeConsult = (): void => {
-        setIsPaused(!isPaused);
-    }
+    const handleReset = async (): Promise<void> => {
+        console.log("Reset");
 
-    const handleCopyResult = (): void => {
+        try {
+            await invoke("cancel_consult");
 
-    }
+            setTotalCount(0);
+            setLoadedCount(0);
+            setCodeParcelsText("");
+            setResultParcelsText("");
+            setConsultStatus("default");
+        } catch (error) {
+            console.error("Error cancel consult", error);
+        }
+    };
+
+    const handlePauseConsult = async (): Promise<void> => {
+        console.log("Pause");
+
+        try {
+            setConsultStatus("paused");
+            await invoke("pause_consult");
+        } catch (error) {
+            console.error("Error pause consult", error);
+        }
+    };
+
+    const handleResumeConsult = async (): Promise<void> => {
+        console.log("Resume");
+
+        try {
+            setConsultStatus("consulting");
+            await invoke("resume_consult");
+        } catch (error) {
+            console.error("Error resume consult", error);
+        }
+    };
+
+    const handleCopyResult = async (): Promise<void> => {
+        try {
+            await navigator.clipboard.writeText(resultParcelsText);
+            await message("Resultado copiado com sucesso!", { title: "Sucesso!", kind: "info" });
+        } catch (error) {
+            console.error("Error copying result: ", error);
+            await message("Erro ao copiar resultado", { title: "Erro!", kind: "error" });
+        }
+    };
 
     return (
         <div className={styles.container}>
@@ -104,7 +139,7 @@ export function ParcelsPage(): JSX.Element {
                         id: "textarea-code",
                         placeholder: 'Coloque os códigos um em cada linha, exemplo: \n\n#######-#####-####-####\n#######-#####-####-####',
                         value: codeParcelsText,
-                        onChange: (e) => setCodeParcelsText(e.target.value.trim()),
+                        onChange: (e) => setCodeParcelsText(e.target.value),
                         cols: 30,
                         rows: 10
                     }}
@@ -132,27 +167,38 @@ export function ParcelsPage(): JSX.Element {
                     Código da Parcela | Nome Proprietário | CPF ou CNPJ do Proprietário | Denominação | Área | Situação Parcela | Responsável Técnico | Situação Área | Cidade-UF | Cartório | CNS | Matrícula | Situação Matrícula | Código INCRA | Tipo da Propriedade | Data de Entrada | Documento RT
                 </p>
                 <div className={styles.buttonsContainer}>
-                    {isConsulting &&  (
-                        <Button title={isPaused ? "Continuar" : "Pausar"} variant="outlined" onClick={handlePauseAndResumeConsult} />
+                    {consultStatus === "consulting" &&  (
+                        <Button type="button" title="Pausar" variant="outlined" onClick={handlePauseConsult} />
                     )}
-                    {resultParcelsText !== "" && (
+                    {consultStatus === "paused" && (
+                        <Button type="button" title="Continuar" variant="outlined" onClick={handleResumeConsult} />
+                    )}
+                    {resultParcelsText.trim() !== "" && (
                         <Button type="button" title="Copiar Resultado" variant="outlined" onClick={handleCopyResult} />
                     )}
-                    <Button type="submit" disabled={isConsulting || codeParcelsText.trim() === ""} title="Consultar" />
+                    {(consultStatus === "consulting" || consultStatus === "paused") && (
+                        <Button type="button" title="Resetar" onClick={handleReset} />
+                    )}
+                    {consultStatus === "default" && (
+                        <Button type="submit" disabled={codeParcelsText.trim() === ""} title="Consultar" />
+                    )}
                 </div>
             </form>
-            <div className={styles.loadingContainer}>
-                <div className={styles.progressBarContainer}>
-                    <div
-                        className={styles.progressBar}
-                        style={{ width: `${(loadedCount / totalCount) * 100}%` }}
-                        id="progress-bar"
-                    ></div>
+            {(consultStatus === "consulting" || consultStatus === "paused") && (
+                <div className={styles.loadingContainer}>
+                    <div className={styles.progressBarContainer}>
+                        <div
+                            className={`${styles.progressBar} ${consultStatus === "paused" ? styles.paused : ''}`}
+                            style={{ width: `${(loadedCount / totalCount) * 100}%` }}
+                            id="progress-bar"
+                        ></div>
+                    </div>
+                    <p className={styles.loadingLabel}>
+                        <span id="loaded">{loadedCount}</span> | <span id="total">{totalCount}</span>
+                        {consultStatus === "paused" && <span className={styles.pausedText}> (Pausado)</span>}
+                    </p>
                 </div>
-                <p className={styles.loadingLabel}>
-                    <span id="loaded">{loadedCount}</span> | <span id="total">{totalCount}</span>
-                </p>
-            </div>
+            )}
         </div>
     );
 }

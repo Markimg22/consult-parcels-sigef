@@ -1,9 +1,9 @@
 use futures::lock::Mutex;
 use serde::Serialize;
-use std::{sync::Arc, time::Duration};
-use tauri::Emitter;
-use tauri_plugin_http::reqwest::Client;
-use tokio::{task, time::sleep};
+use tauri::{AppHandle, Emitter, State};
+use std::{sync::{atomic::{AtomicUsize, Ordering}, Arc}, time::Duration};
+use tauri_plugin_http::reqwest::{Client, Response};
+use tokio::{sync::{mpsc, Notify}, time::sleep};
 
 use super::cookies_services;
 
@@ -28,27 +28,64 @@ pub struct ParcelData {
     rt_document: String,
 }
 
-#[derive(Clone, Debug)]
-enum ExecutionState {
-    Running,
-    Paused,
-    Stopped
+#[derive(Debug, Serialize, Default, Clone)]
+pub struct ParcelResponse {
+    data: ParcelData,
+    total_count: usize,
+    current_count: usize,
 }
 
 #[derive(Clone)]
-struct SharedState {
-    execution_state: ExecutionState,
-    error_message: Option<String>,
-    current_indices: Vec<usize>
+pub struct AppState {
+    is_paused: Arc<Mutex<bool>>,
+    is_cancelled: Arc<Mutex<bool>>,
+    notify: Arc<Notify>,
 }
 
-impl SharedState {
-    fn new(num_threads: usize) -> Self {
+impl AppState {
+    pub fn new() -> Self {
         Self {
-            execution_state: ExecutionState::Running,
-            error_message: None,
-            current_indices: vec![0; num_threads],
+            is_paused: Arc::new(Mutex::new(false)),
+            is_cancelled: Arc::new(Mutex::new(false)),
+            notify: Arc::new(Notify::new()),
         }
+    }
+
+    pub async fn wait_if_paused(&self) {
+        loop {
+            let paused = *self.is_paused.lock().await;
+            let cancelled = *self.is_cancelled.lock().await;
+
+            if cancelled {
+                break;
+            }
+
+            if !paused {
+                return;
+            }
+
+            self.notify.notified().await;
+        }
+    }
+
+    pub async fn pause(&self) {
+        *self.is_paused.lock().await = true;
+    }
+
+    pub async fn resume(&self) {
+        *self.is_paused.lock().await = false;
+        self.notify.notify_waiters();
+    }
+
+    pub async fn cancel(&self) {
+        *self.is_cancelled.lock().await = true;
+        self.notify.notify_waiters();
+    }
+
+    pub async fn reset(&self) {
+        *self.is_paused.lock().await = false;
+        *self.is_cancelled.lock().await = false;
+        self.notify.notify_waiters();
     }
 }
 
@@ -71,29 +108,13 @@ fn extract_value(html: &str, start_pattern: &str, clean_pattern: Option<&str>) -
         .to_string()
 }
 
-async fn consult_single_parcel(parcel_code_consult: String, shared_state: Arc<Mutex<SharedState>>) -> Result<ParcelData, String> {
-    {
-        let state = shared_state.lock().await;
-        match state.execution_state {
-            ExecutionState::Stopped => {
-                return Err("Operation cancelled due to error or user request".to_string());
-            }
-            ExecutionState::Paused => {
-                drop(state);
-                while shared_state.lock().await.execution_state == ExecutionState::Paused {
-                    sleep(Duration::from_millis(100)).await;
-                }
-            }
-            ExecutionState::Running => {}
-        }
-    }
-
+async fn consult_single_parcel(parcel_code_consult: String) -> Result<ParcelData, String> {
     match cookies_services::get_cookies() {
         Ok(cookies) => {
-            let url = format!("https://sigef.incra.gov.br/geo/parcela/detalhe/{}/", parcel_code_consult);
-            let client = Client::new();
+            let url: String = format!("https://sigef.incra.gov.br/geo/parcela/detalhe/{}/", parcel_code_consult);
+            let client: Client = Client::new();
 
-            let response = client.get(&url)
+            let response: Response = client.get(&url)
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
                 .header("Cookie", &cookies)
                 .send()
@@ -101,10 +122,10 @@ async fn consult_single_parcel(parcel_code_consult: String, shared_state: Arc<Mu
                 .map_err(|e| format!("Erro ao enviar a requisição: {}", e))?;
 
             if !response.status().is_success() {
-                return Err(format!("Código da parcela não encontrado!: {}", response.status()));
+                return Err(format!("Código da parcela inválido! {}", parcel_code_consult));
             }
 
-            let html_in_text = response.text()
+            let html_in_text: String = response.text()
                 .await
                 .map_err(|e| format!("Erro ao ler o corpo da resposta: {}", e))?;
 
@@ -112,8 +133,10 @@ async fn consult_single_parcel(parcel_code_consult: String, shared_state: Arc<Mu
                 return Err("Cookies vencidos ou inválidos! Renove os cookies e tente novamente.".to_string());
             }
 
+            sleep(Duration::from_secs(2)).await;
+
             // Searching for HTML data
-            let mut result = ParcelData::default();
+            let mut result: ParcelData = ParcelData::default();
 
             // Código Parcela
             result.parcel_code = parcel_code_consult;
@@ -202,105 +225,91 @@ async fn consult_single_parcel(parcel_code_consult: String, shared_state: Arc<Mu
 }
 
 #[tauri::command]
-pub async fn consult_parcels(window: tauri::Window, parcels: Vec<String>) -> Result<(), String> {
-    let chunk_size = (parcels.len() + 9) / 10;
-    let chunks: Vec<_> = parcels.chunks(chunk_size).collect();
-    let shared_state = Arc::new(Mutex::new(SharedState::new(chunks.len())));
-    let mut tasks = Vec::new();
+pub async fn consult_parcels(
+    app_handler: AppHandle,
+    parcels: Vec<String>,
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    let total_count = parcels.len();
+    let thread_count = 10;
+    let chunk_size = (parcels.len() + thread_count - 1) / thread_count;
 
-    for (i, chunk) in chunks.into_iter().enumerate() {
-        let window_clone = window.clone();
+    let (tx, mut rx) = mpsc::channel::<ParcelResponse>(100);
+
+    let progress_counter = Arc::new(AtomicUsize::new(0));
+
+    let state = Arc::new(state.inner().clone());
+
+    for chunk in parcels.chunks(chunk_size) {
+        let tx = tx.clone();
+        let state = state.clone();
+        let app_handler = app_handler.clone();
+        let progress_counter = progress_counter.clone();
         let chunk = chunk.to_vec();
-        let shared_state = Arc::clone(&shared_state);
 
-        let task = task::spawn(async move {
-            let mut current_index = shared_state.lock().await.current_indices[i];
-
-            while current_index < chunk.len() {
-                let parcel = &chunk[current_index];
-
-                {
-                    let mut state = shared_state.lock().await;
-                    state.current_indices[i] = current_index;
+        tokio::spawn(async move {
+            for parcel in chunk.into_iter() {
+                if *state.is_cancelled.lock().await {
+                    break;
                 }
 
-                let result = consult_single_parcel(parcel.clone(), Arc::clone(&shared_state)).await;
+                state.wait_if_paused().await;
 
-                match result {
-                    Ok(parcel_data) => {
-                        let state = shared_state.lock().await;
-                        if matches!(state.execution_state, ExecutionState::Stopped) {
+                match consult_single_parcel(parcel.clone()).await {
+                    Ok(data) => {
+                        let current_count = progress_counter.fetch_add(1, Ordering::SeqCst) + 1;
+
+                        let response = ParcelResponse {
+                            data,
+                            total_count,
+                            current_count,
+                        };
+
+                        if tx.send(response).await.is_err() {
                             break;
                         }
-
-                        if let Err(e) = window_clone.emit("consult_parcel_result", &parcel_data) {
-                            eprintln!("Thread {} - erro ao enviar resultado: {}", i, e);
-                        }
                     }
-                    Err(e) => {
-                        if let Err(emit_err) = window_clone.emit("consult_parcel_result", &e) {
-                            eprintln!("Thread {} - erro ao enviar erro: {}", i, emit_err);
-                        }
+                    Err(error) => {
+                        state.pause().await;
+                        app_handler.emit("consult_parcels", error.clone()).unwrap();
                         break;
                     }
                 }
-
-                current_index += 1;
-                sleep(Duration::from_secs(2)).await;
             }
         });
-
-        tasks.push(task);
     }
 
-    for task in tasks {
-        if let Err(e) = task.await {
-            eprintln!("Erro em uma das Threads: {}", e);
-        }
-    }
+    drop(tx);
 
-    let final_state = shared_state.lock().await;
-    if matches!(final_state.execution_state, ExecutionState::Stopped) {
-        if let Some(error_msg) = &final_state.error_message {
-            return Err(error_msg.clone());
+    while let Some(response) = rx.recv().await {
+        if !*state.is_cancelled.lock().await {
+            app_handler.emit("consult_parcels", response).unwrap();
         }
     }
 
     Ok(())
+}
 
-    // for (i, chunk) in parcels.chunks(chunk_size).enumerate() {
-    //     let window_clone = window.clone();
-    //     let chunk = chunk.to_vec();
+#[tauri::command]
+pub async fn pause_consult(state: State<'_, AppState>) -> Result<(), String> {
+    state.pause().await;
+    Ok(())
+}
 
-    //     let task = task::spawn(async move {
-    //         for parcel in chunk {
-    //             let result = consult_single_parcel(parcel).await;
+#[tauri::command]
+pub async fn resume_consult(state: State<'_, AppState>) -> Result<(), String> {
+    state.resume().await;
+    Ok(())
+}
 
-    //             match result {
-    //                 Ok(parcel_data) => {
-    //                     if let Err(e) = window_clone.emit("consult_parcel_result", &parcel_data) {
-    //                         eprintln!("Thread {} - erro ao enviar resultado: {}", i, e);
-    //                     }
-    //                 }
-    //                 Err(e) => {
-    //                     if let Err(e) = window_clone.emit("consult_parcel_result", &e.to_string()) {
-    //                         eprintln!("Thread {} - erro ao enviar erro: {}", i, e);
-    //                     }
-    //                 }
-    //             }
+#[tauri::command]
+pub async fn reset_consult(state: State<'_, AppState>) -> Result<(), String> {
+    state.reset().await;
+    Ok(())
+}
 
-    //             sleep(Duration::from_secs(2)).await;
-    //         }
-    //     });
-
-    //     tasks.push(task);
-    // }
-
-    // for task in tasks {
-    //     if let Err(e) = task.await {
-    //         eprintln!("Erro em uma das threads: {}", e);
-    //     }
-    // }
-
-    // Ok(())
+#[tauri::command]
+pub async fn cancel_consult(state: State<'_, AppState>) -> Result<(), String> {
+    state.cancel().await;
+    Ok(())
 }
