@@ -1,6 +1,6 @@
 [package]
 name = "consult-parcels-sigef"
-version = "0.1.0"
+version = "0.1.1"
 description = "Consultar Parcelas SIGEF"
 authors = ["Marcos Campos"]
 edition = "2021"
