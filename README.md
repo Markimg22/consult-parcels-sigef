@@ -29,3 +29,8 @@ Create a new tag in git for the version:
 git tag version_number (v0.1.2)
 ```
 Now you can commit and upload the new version.
+
+> ## To Do:
+**_(last update: 05/02/2025)_**
+
+- [] Fix build for windows 11
