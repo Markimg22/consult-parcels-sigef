@@ -6,7 +6,7 @@ Install dependecies:
 ```bash
 npm install
 ```
----
+
 Run with Tauri:
 ```bash
 npm run tauri dev
@@ -18,7 +18,7 @@ Generate a new version in the frontend project:
 ```bash
 npm version version_number (ex.: 0.1.2)
 ```
----
+
 Generate a new version in backend project:
 ```bash
 cargo set-version version_number (ex.: 0.1.2)
