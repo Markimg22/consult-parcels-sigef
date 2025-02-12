@@ -34,3 +34,4 @@ Now you can commit and upload the new version.
 **_(last update: 05/02/2025)_**
 
 - [] Fix build for windows 11
+- [X] Remove especial HTML caracteres
