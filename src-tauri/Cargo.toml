@@ -1,6 +1,6 @@
 [package]
 name = "consult-parcels-sigef"
-version = "0.1.1"
+version = "0.1.2"
 description = "Consultar Parcelas SIGEF"
 authors = ["Marcos Campos"]
 edition = "2021"
@@ -21,6 +21,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-http = "2"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3.31"
+html-escape = "0.2.13"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-cli = "2"

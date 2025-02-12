@@ -1,9 +1,19 @@
 use futures::lock::Mutex;
+use html_escape::decode_html_entities;
 use serde::Serialize;
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tauri::{AppHandle, Emitter, State};
-use std::{sync::{atomic::{AtomicUsize, Ordering}, Arc}, time::Duration};
 use tauri_plugin_http::reqwest::{Client, Response};
-use tokio::{sync::{mpsc, Notify}, time::sleep};
+use tokio::{
+    sync::{mpsc, Notify},
+    time::sleep,
+};
 
 use super::cookies_services;
 
@@ -142,9 +152,9 @@ async fn consult_single_parcel(parcel_code_consult: String) -> Result<ParcelData
                 return Err(format!("Código da parcela inválido! {}", parcel_code_consult));
             }
 
-            let html_in_text: String = response.text()
+            let html_in_text: String = decode_html_entities(&response.text()
                 .await
-                .map_err(|e| format!("Erro ao ler o corpo da resposta: {}", e))?;
+                .map_err(|e| format!("Erro ao ler o corpo da resposta: {}", e))?).to_string();
 
             if html_in_text.contains("Request Rejected") {
                 return Err("Cookies vencidos ou inválidos! Renove os cookies e tente novamente.".to_string());
@@ -245,7 +255,7 @@ async fn consult_single_parcel(parcel_code_consult: String) -> Result<ParcelData
 pub async fn consult_parcels(
     app_handler: AppHandle,
     parcels: Vec<String>,
-    state: State<'_, AppState>
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
     let total_count = parcels.len();
     let thread_count = 10;
