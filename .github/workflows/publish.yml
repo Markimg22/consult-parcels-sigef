@@ -45,7 +45,7 @@ jobs:
             - name: Install WebView2 (Windows only)
               if: matrix.platform == 'windows-latest'
               run: |
-                  choco install microsoft-edge-webview2-runtime
+                  winget install --id Microsoft.EdgeWebView2Runtime -e
 
             - name: Install Frontend dependencies
               run: npm install
