@@ -20,7 +20,7 @@ jobs:
                     - platform: "ubuntu-22.04"
                       args: ""
                     - platform: "windows-latest"
-                      args: "--target x86_64-pc-windows-msvc"
+                      args: ""
         runs-on: ${{ matrix.platform }}
         steps:
             - uses: actions/checkout@v4
@@ -45,18 +45,19 @@ jobs:
             - name: Install WebView2 (Windows only)
               if: matrix.platform == 'windows-latest'
               run: |
-                  winget install --id Microsoft.EdgeWebView2Runtime -e
+                  curl -o MicrosoftEdgeWebView2Setup.exe https://go.microsoft.com/fwlink/p/?LinkId=2124703
+                  Start-Process MicrosoftEdgeWebView2Setup.exe -ArgumentList "/silent /install" -NoNewWindow -Wait
 
             - name: Install Frontend dependencies
               run: npm install
 
             - uses: tauri-apps/tauri-action@v0
               env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                tagName: v__VERSION__
-                releaseName: 'v__VERSION__'
-                releaseBody: 'See the assets to download this version and install.'
-                releaseDraft: true
-                prerelease: false
-                args: ${{ matrix.args }}
+                  tagName: v__VERSION__
+                  releaseName: "v__VERSION__"
+                  releaseBody: "See the assets to download this version and install."
+                  releaseDraft: true
+                  prerelease: false
+                  args: ${{ matrix.args }}
