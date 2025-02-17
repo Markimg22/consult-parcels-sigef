@@ -25,20 +25,14 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Extract version from package.json (or Cargo.toml)
-              id: get_version
-              run: |
-                  VERSION=$(jq -r .version package.json)
-                  if [ -z "$VERSION" ]; then
-                    VERSION=$(grep -oP 'version = "\K[^\"]+' Cargo.toml)
-                  fi
-                  echo "Version is $VERSION"
-                  echo "version=$VERSION" >> $GITHUB_ENV
+            - name: Get Current Version
+              id: package-version
+              uses: martinbeentjes/npm-get-version-action@v1.3.1
 
             - name: Create Tag
               run: |
-                  git tag "v${{ env.version }}"
-                  git push origin "v${{ env.version }}"
+                  git tag "v${{ steps.package-version.outputs.current-version}}"
+                  git push origin "v${{ steps.package-version.outputs.current-version}}"
 
             - name: Rust setup
               uses: dtolnay/rust-toolchain@stable
@@ -70,14 +64,14 @@ jobs:
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                  tagName: v${{ env.version }}
-                  releaseName: "v${{ env.version }}"
+                  tagName: v${{ steps.package-version.outputs.current-version}}
+                  releaseName: "v${{ steps.package-version.outputs.current-version}}"
                   releaseDraft: true
                   prerelease: false
                   args: -t ${{ matrix.target }}
 
             - name: Create GitHub Release
               run: |
-                  gh release create v${{ env.version }} target/release/bundle/* --title "Release v${{ env.version }}" --notes "Release notes for version v${{ env.version }}"
+                  gh release create v${{ steps.package-version.outputs.current-version}} target/release/bundle/* --title "Release v${{ steps.package-version.outputs.current-version}}" --notes "Release notes for version v${{ steps.package-version.outputs.current-version}}"
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
