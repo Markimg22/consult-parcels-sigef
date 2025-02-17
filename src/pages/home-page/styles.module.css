@@ -11,6 +11,10 @@
     text-shadow: 1px 1px rgba(0, 0, 0, 0.279);
 }
 
+.version {
+    font-size: 1rem;
+}
+
 .navbar {
     display: flex;
     flex-direction: row;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { CookiesPage, ParcelsPage } from "../../pages";
+import packageJson from '../../../package.json';
 
 import styles from './styles.module.css';
 
@@ -18,7 +19,9 @@ export function HomePage(): JSX.Element {
 
     return (
         <main className={styles.container}>
-            <h1 className={styles.title}>Consultar Parcelas SIGEF</h1>
+            <h1 className={styles.title}>
+                Consultar Parcelas SIGEF <span className={styles.version}>v{packageJson.version}</span>
+            </h1>
             <nav>
                 <ul className={styles.navbar}>
                     <li className={styles.link} onClick={() => handleChangePage(Pages.PARCELS)}>
@@ -32,7 +35,7 @@ export function HomePage(): JSX.Element {
             <hr className={styles.line} />
             <div className={styles.content}>
                 <div style={{ display: pages === Pages.PARCELS ? "block" : "none" }}>
-                    <ParcelsPage  />
+                    <ParcelsPage />
                 </div>
                 <div style={{ display: pages === Pages.COOKIES ? "block" : "none" }}>
                     <CookiesPage />
