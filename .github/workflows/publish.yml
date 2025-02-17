@@ -78,11 +78,7 @@ jobs:
                   prerelease: false
                   args: -t ${{ matrix.target }}
 
-            - name: Create GitHub Release
+            - name: Debug Listing Files
               run: |
-                  ARTIFACT_PATH="target/${{ matrix.target }}/release/bundle/*"
-                  echo "Artifact path: $ARTIFACT_PATH"
-
-                  gh release create "v${{ env.version }}" $ARTIFACT_PATH --title "Release v${{ env.version }}" --notes "Release notes for version v${{ env.version }}"
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  echo "Listing files"
+                  ls -la
