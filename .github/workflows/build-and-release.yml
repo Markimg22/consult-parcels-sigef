@@ -21,32 +21,36 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Rust Setup
+            - name: Rust setup
               uses: dtolnay/rust-toolchain@stable
 
-            - name: Rust Cache
+            - name: Rust cache
               uses: swatinem/rust-cache@v2
               with:
                   workspaces: "./src-tauri -> target"
 
-            - name: Setup Node.js
+            - name: Setup node.js
               uses: actions/setup-node@v4
               with:
                   node-version: 20
 
-            - name: Install Frontend dependencies
+            - name: Install front-end dependencies
               run: npm install
 
             - name: Rustup add target
               run: rustup target add ${{ matrix.target }}
+
+            - name: Get version from package.json
+              id: get_version
+              run: echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
 
             - name: Build Tauri App
               uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                  tagName: v__VERSION__
-                  releaseName: "v__VERSION__"
+                  tagName: v${{ env.VERSION }}
+                  releaseName: "v${{ env.VERSION }}"
                   releaseDraft: true
                   includeRelease: true
                   prerelease: false
