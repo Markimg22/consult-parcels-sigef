@@ -42,13 +42,14 @@ jobs:
 
             - name: Extract version from package.json (or Cargo.toml)
               id: get_version
+              shell: pwsh
               run: |
-                  VERSION=$(jq -r .version package.json)
-                  if [ -z "$VERSION" ]; then
-                    VERSION=$(grep -oP 'version = "\K[^\"]+' Cargo.toml)
-                  fi
-                  echo "Version is $VERSION"
-                  echo "version=$VERSION" >> $GITHUB_ENV
+                  $VERSION = (Get-Content package.json | ConvertFrom-Json).version
+                  if (-not $VERSION) {
+                    $VERSION = (Select-String -Pattern 'version = "([^"]+)"' -Path Cargo.toml).Matches.Groups[1].Value
+                  }
+                  Write-Output "Version is $VERSION"
+                  echo "version=$VERSION" >> $env:GITHUB_ENV
 
             - name: Build Tauri App
               uses: tauri-apps/tauri-action@v0
