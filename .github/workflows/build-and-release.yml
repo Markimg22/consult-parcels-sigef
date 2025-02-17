@@ -1,4 +1,4 @@
-name: Build e Release
+name: "Build and Release"
 
 on:
     push:
@@ -7,7 +7,7 @@ on:
             - develop
 
 jobs:
-    build:
+    publish-tauri:
         permissions:
             contents: write
         strategy:
@@ -20,8 +20,7 @@ jobs:
                       target: x86_64-pc-windows-msvc
         runs-on: ${{ matrix.platform }}
         steps:
-            - name: Checkout do código
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
 
             - name: Rust setup
               uses: dtolnay/rust-toolchain@stable
@@ -31,77 +30,25 @@ jobs:
               with:
                   workspaces: "./src-tauri -> target"
 
-            - name: Configurar Node.js
+            - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: 20
 
-            - name: Instalar dependências do projeto
+            - name: Install Frontend dependencies
               run: npm install
 
-            - name: Configurar Rust e adicionar target
+            - name: Rustup add target
               run: rustup target add ${{ matrix.target }}
 
-            - name: Build da aplicação Tauri
+            - name: Build Tauri App
               uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                  # Constrói para o target especificado na matriz
+                  tagName: v${{ env.version }}
+                  releaseName: "v${{ env.version }}"
+                  releaseDraft: true
+                  includeRelase: true
+                  prerelease: false
                   args: -t ${{ matrix.target }}
-
-            - name: Upload de Artefatos MacOS
-              if: matrix.platform == 'macos-latest'
-              uses: actions/upload-artifact@v4
-              with:
-                  name: ${{ matrix.target }}-build
-                  path: ./src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
-
-            - name: Upload de Artefatos Windows
-              if: matrix.platform == 'windows-latest'
-              uses: actions/upload-artifact@v4
-              with:
-                  name: ${{ matrix.target }}-build
-                  path: ./src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-
-    release:
-        permissions:
-            contents: write
-        runs-on: ubuntu-latest
-        needs: build
-        steps:
-            - name: Checkout do código
-              uses: actions/checkout@v4
-
-            - name: Configurar Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
-
-            - name: Extrair versão do package.json
-              id: version
-              run: |
-                  VERSION=$(jq -r '.version' package.json)
-                  echo "version=$VERSION" >> $GITHUB_OUTPUT
-                  echo "Versão extraída: $VERSION"
-
-            - name: Download dos artefatos de build
-              uses: actions/download-artifact@v4
-              with:
-                  # Usa um padrão para baixar todos os artefatos criados no job de build
-                  name: "*-build"
-
-            - name: Criar Tag Git
-              run: |
-                  TAG="v${{ steps.version.outputs.version }}"
-                  git tag "$TAG"
-                  git push origin "$TAG"
-
-            - name: Criar Release no GitHub
-              uses: softprops/action-gh-release@v2
-              with:
-                  # Inclui os artefatos baixados na release; ajuste o caminho se necessário
-                  files: |
-                      ./src-tauri/target/**/release/bundle/*
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
