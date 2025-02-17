@@ -50,7 +50,9 @@ jobs:
                   args: -t ${{ matrix.target }}
 
             - name: Upload Artifacts
-              run: ls -la
+              if: matrix.platform == 'macos-latest'
+              run: |
+                  ls -la dist
             #   uses: actions/upload-artifact@v3
             #   with:
             #       name: ${{ matrix.target }}-build
