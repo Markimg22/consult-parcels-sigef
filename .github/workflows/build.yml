@@ -1,0 +1,57 @@
+name: "Build"
+
+on:
+    push:
+        branches:
+            - master
+
+jobs:
+    build-tauri:
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "macos-latest"
+                      target: aarch64-apple-darwin
+                    - platform: "windows-latest"
+                      target: x86_64-pc-windows-msvc
+        runs-on: ${{ matrix.platform }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Rust setup
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
+              with:
+                  workspaces: "./src-tauri -> target"
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Install Frontend dependencies
+              run: npm install
+
+            - name: Rustup add target
+              run: rustup target add ${{ matrix.target }}
+
+            - name: Build Tauri App
+              uses: tauri-apps/tauri-action@v0
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tagName: v${{ env.version }}
+                  releaseName: "v${{ env.version }}"
+                  releaseDraft: true
+                  prerelease: false
+                  args: -t ${{ matrix.target }}
+
+            - name: Upload Artifacts
+              run: ls -la
+            #   uses: actions/upload-artifact@v3
+            #   with:
+            #       name: ${{ matrix.target }}-build
+            #       path: target/${{ matrix.target }}/release/bundle/*
