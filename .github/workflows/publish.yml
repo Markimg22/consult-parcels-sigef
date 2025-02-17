@@ -14,27 +14,24 @@ jobs:
             matrix:
                 include:
                     - platform: "macos-latest"
-                      args: "--target aarch64-apple-darwin"
+                      target: aarch64-apple-darwin
                     - platform: "macos-latest"
-                      args: "--target x86_64-apple-darwin"
+                      target: x86_64-apple-darwin
                     - platform: "ubuntu-22.04"
-                      args: ""
+                      target: x86_64-unknown-linux-gnu
                     - platform: "windows-latest"
-                      args: ""
+                      target: x86_64-pc-windows-msvc
         runs-on: ${{ matrix.platform }}
         steps:
             - uses: actions/checkout@v4
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-
-            - name: Install Rust stable
+            - name: Rust setup
               uses: dtolnay/rust-toolchain@stable
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
               with:
-                  # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+                  workspaces: "./src-tauri -> target"
 
             - name: Install dependencies (Ubuntu only)
               if: matrix.platform == 'ubuntu-22.04'
@@ -42,14 +39,16 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-            - name: Install WebView2 (Windows only)
-              if: matrix.platform == 'windows-latest'
-              run: |
-                  curl -o MicrosoftEdgeWebView2Setup.exe https://go.microsoft.com/fwlink/p/?LinkId=2124703
-                  Start-Process MicrosoftEdgeWebView2Setup.exe -ArgumentList "/silent /install" -NoNewWindow -Wait
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
 
             - name: Install Frontend dependencies
               run: npm install
+
+            - name: Rustup add target
+              run: rustup target add ${{ matrix.target }}
 
             - uses: tauri-apps/tauri-action@v0
               env:
@@ -57,7 +56,6 @@ jobs:
               with:
                   tagName: v__VERSION__
                   releaseName: "v__VERSION__"
-                  releaseBody: "See the assets to download this version and install."
                   releaseDraft: true
                   prerelease: false
-                  args: ${{ matrix.args }}
+                  args: -t ${{ matrix.target }}
