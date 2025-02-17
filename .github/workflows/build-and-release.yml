@@ -22,10 +22,21 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Rust setup
+            - name: Extract version from package.json (or Cargo.toml)
+              id: get_version
+              shell: pwsh
+              run: |
+                  $VERSION = (Get-Content package.json | ConvertFrom-Json).version
+                  if (-not $VERSION) {
+                    $VERSION = (Select-String -Pattern 'version = "([^"]+)"' -Path Cargo.toml).Matches.Groups[1].Value
+                  }
+                  Write-Output "Version is $VERSION"
+                  echo "version=$VERSION" >> $env:GITHUB_ENV
+
+            - name: Rust Setup
               uses: dtolnay/rust-toolchain@stable
 
-            - name: Rust cache
+            - name: Rust Cache
               uses: swatinem/rust-cache@v2
               with:
                   workspaces: "./src-tauri -> target"
