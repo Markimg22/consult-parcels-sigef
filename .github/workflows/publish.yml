@@ -37,6 +37,7 @@ jobs:
                   echo "version=$VERSION" >> $env:GITHUB_ENV
 
             - name: Create Tag
+              if: matrix.platform == 'macos-latest'
               run: |
                   git tag "v${{ env.version }}"
                   git push origin "v${{ env.version }}"
