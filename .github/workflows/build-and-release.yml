@@ -49,6 +49,6 @@ jobs:
                   tagName: v${{ env.version }}
                   releaseName: "v${{ env.version }}"
                   releaseDraft: true
-                  includeRelase: true
+                  includeRelease: true
                   prerelease: false
                   args: -t ${{ matrix.target }}
