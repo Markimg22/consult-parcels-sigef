@@ -17,6 +17,8 @@ jobs:
                       target: aarch64-apple-darwin
                     - platform: "windows-latest"
                       target: x86_64-pc-windows-msvc
+                    - platform: "ubuntu-22.04"
+                      target: x86_64-unknown-linux-gnu
         runs-on: ${{ matrix.platform }}
         steps:
             - uses: actions/checkout@v4
@@ -29,6 +31,12 @@ jobs:
               with:
                   workspaces: "./src-tauri -> target"
 
+            - name: Install dependencies (Ubuntu only)
+              if: matrix.platform == 'ubuntu-22.04'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
             - name: Setup node.js
               uses: actions/setup-node@v4
               with:
@@ -40,24 +48,13 @@ jobs:
             - name: Rustup add target
               run: rustup target add ${{ matrix.target }}
 
-            - name: Extract version from package.json (or Cargo.toml)
-              id: get_version
-              shell: pwsh
-              run: |
-                  $VERSION = (Get-Content package.json | ConvertFrom-Json).version
-                  if (-not $VERSION) {
-                    $VERSION = (Select-String -Pattern 'version = "([^"]+)"' -Path Cargo.toml).Matches.Groups[1].Value
-                  }
-                  Write-Output "Version is $VERSION"
-                  echo "version=$VERSION" >> $env:GITHUB_ENV
-
             - name: Build Tauri App
               uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                  tagName: v${{ env.version }}
-                  releaseName: "v${{ env.version }}"
+                  tagName: v__VERSION__
+                  releaseName: "v__VERSION__"
                   releaseDraft: true
                   includeRelease: true
                   prerelease: false
