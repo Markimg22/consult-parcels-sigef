@@ -25,6 +25,21 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Extract version from package.json (or Cargo.toml)
+              id: get_version
+              run: |
+                  VERSION=$(jq -r .version package.json)
+                  if [ -z "$VERSION" ]; then
+                    VERSION=$(grep -oP 'version = "\K[^\"]+' Cargo.toml)
+                  fi
+                  echo "Version is $VERSION"
+                  echo "version=$VERSION" >> $GITHUB_ENV
+
+            - name: Create Tag
+              run: |
+                  git tag "v${{ env.version }}"
+                  git push origin "v${{ env.version }}"
+
             - name: Rust setup
               uses: dtolnay/rust-toolchain@stable
 
@@ -50,12 +65,19 @@ jobs:
             - name: Rustup add target
               run: rustup target add ${{ matrix.target }}
 
-            - uses: tauri-apps/tauri-action@v0
+            - name: Build Tauri App
+              uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
-                  tagName: v__VERSION__
-                  releaseName: "v__VERSION__"
+                  tagName: v${{ env.version }}
+                  releaseName: "v${{ env.version }}"
                   releaseDraft: true
                   prerelease: false
                   args: -t ${{ matrix.target }}
+
+            - name: Create GitHub Release
+              run: |
+                  gh release create v${{ env.version }} target/release/bundle/* --title "Release v${{ env.version }}" --notes "Release notes for version v${{ env.version }}"
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
